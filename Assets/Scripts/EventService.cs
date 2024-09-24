@@ -9,17 +9,21 @@ using System.IO;
 
 public class EventService : MonoBehaviour
 {
-    private const string serverUrl = "https://my-server-url.com/api/events"; // URL of server
-    private const string fileNameForEvents = "events.json";
-    private const float retryDelay = 3f; // Delay between attempts in seconds
+    [SerializeField] SettingsForEventService _mySettings;
 
-    private EventQueue eventQueue = new EventQueue(); // Event queue
-    private string fullFileNameForEvents;
+    private EventQueue _eventQueue = new EventQueue(); // Event queue
+    private string _fullFileNameForEvents;
 
     private void Awake()
     {
-        fullFileNameForEvents = Path.Combine(Application.persistentDataPath, fileNameForEvents);
-        Debug.Log($"Start: fullFileNameForEvents: {fullFileNameForEvents}");
+        if (_mySettings == null)
+        {
+            Debug.LogError("EventService: i have no link for SettingsForEventService");
+            return;
+        }
+
+        _fullFileNameForEvents = Path.Combine(Application.persistentDataPath, _mySettings.FileNameForEvents);
+        Debug.Log($"Start: fullFileNameForEvents: {_fullFileNameForEvents}");
 
         LoadEventsFromDisk();
 
@@ -30,7 +34,7 @@ public class EventService : MonoBehaviour
     // A method for other classes that saves the event
     public void TrackEvent(string type, string data)
     {
-        eventQueue.events.Enqueue(new EventData(type, data));
+        _eventQueue.events.Enqueue(new EventData(type, data));
     }
 
     // Method for sending events
@@ -39,7 +43,7 @@ public class EventService : MonoBehaviour
         string json = JsonConvert.SerializeObject(eventQueue, Formatting.Indented);
         Debug.Log($"SendEventsAsync: json:\n{json}");
 
-        using (UnityWebRequest request = new UnityWebRequest(serverUrl, "POST"))
+        using (UnityWebRequest request = new UnityWebRequest(_mySettings.ServerUrl, "POST"))
         {
             // Indicate that the data is sent in JSON format
             request.SetRequestHeader("Content-Type", "application/json");
@@ -76,18 +80,18 @@ public class EventService : MonoBehaviour
     {
         while (true)
         {
-            if (eventQueue.events.Count > 0)
+            if (_eventQueue.events.Count > 0)
             {
                 Debug.Log("Attempting to send events...");
 
                 // Try to send events
-                bool success = await SendEventsAsync(eventQueue);
+                bool success = await SendEventsAsync(_eventQueue);
 
                 // If successful, remove events from the queue
                 if (success)
                 {
                     Debug.Log("Removing sent events from the queue.");
-                    eventQueue.events.Clear(); // Clear the queue after successful send
+                    _eventQueue.events.Clear(); // Clear the queue after successful send
                     DeleteEventsFromDisk();
                 }
                 else
@@ -98,32 +102,32 @@ public class EventService : MonoBehaviour
             }
 
             // Pause before next attempt to process the queue
-            await UniTask.WaitForSeconds(retryDelay);
+            await UniTask.WaitForSeconds(_mySettings.CooldownBeforeSend);
         }
     }
 
     private void SaveEventsToDisk()
     {
-        string json = JsonConvert.SerializeObject(eventQueue, Formatting.Indented);
-        File.WriteAllText(fullFileNameForEvents, json);
+        string json = JsonConvert.SerializeObject(_eventQueue, Formatting.Indented);
+        File.WriteAllText(_fullFileNameForEvents, json);
         Debug.Log("Events saved to disk");
     }
 
     private void LoadEventsFromDisk()
     {
-        if (File.Exists(fullFileNameForEvents))
+        if (File.Exists(_fullFileNameForEvents))
         {
-            string json = File.ReadAllText(fullFileNameForEvents);
-            eventQueue = JsonConvert.DeserializeObject<EventQueue>(json);
+            string json = File.ReadAllText(_fullFileNameForEvents);
+            _eventQueue = JsonConvert.DeserializeObject<EventQueue>(json);
             Debug.Log("Events loaded from disk");
         }
     }
 
     private void DeleteEventsFromDisk()
     {
-        if (File.Exists(fullFileNameForEvents))
+        if (File.Exists(_fullFileNameForEvents))
         {
-            File.Delete(fullFileNameForEvents);
+            File.Delete(_fullFileNameForEvents);
             Debug.Log($"File deleted successfully");
         }
     }
