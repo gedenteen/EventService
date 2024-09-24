@@ -16,22 +16,25 @@ public class EventService : MonoBehaviour
     private EventQueue eventQueue = new EventQueue(); // Event queue
     private string fullFileNameForEvents;
 
-    private void Start()
+    private void Awake()
     {
         fullFileNameForEvents = Path.Combine(Application.persistentDataPath, fileNameForEvents);
         Debug.Log($"Start: fullFileNameForEvents: {fullFileNameForEvents}");
 
         LoadEventsFromDisk();
 
-        // Example of adding events
-        eventQueue.events.Enqueue(new EventData("gameStart", System.DateTime.Now.ToString()));
-
         // Start attempting to send events
-        ProcessEventQueue();
+        ProcessEventQueue().Forget(); // run UniTask and forget
+    }
+
+    // A method for other classes that saves the event
+    public void TrackEvent(string type, string data)
+    {
+        eventQueue.events.Enqueue(new EventData(type, data));
     }
 
     // Method for sending events
-    public async UniTask<bool> SendEventsAsync(EventQueue eventQueue)
+    private async UniTask<bool> SendEventsAsync(EventQueue eventQueue)
     {
         string json = JsonConvert.SerializeObject(eventQueue, Formatting.Indented);
         Debug.Log($"SendEventsAsync: json:\n{json}");
