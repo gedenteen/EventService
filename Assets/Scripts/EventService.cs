@@ -34,7 +34,39 @@ public class EventService : MonoBehaviour
     // A method for other classes that saves the event
     public void TrackEvent(string type, string data)
     {
+        // TODO: make sure that events have already been downloaded from disk by this point
         _eventQueue.events.Enqueue(new EventData(type, data));
+    }
+
+    // Method for processing the event queue
+    private async UniTask ProcessEventQueue()
+    {
+        while (true)
+        {
+            if (_eventQueue.events.Count > 0)
+            {
+                Debug.Log("Attempting to send events...");
+
+                // Try to send events
+                bool success = await SendEventsAsync(_eventQueue);
+
+                // If successful, remove events from the queue
+                if (success)
+                {
+                    Debug.Log("Removing sent events from the queue.");
+                    _eventQueue.events.Clear(); // Clear the queue after successful send
+                    DeleteEventsFromDisk();
+                }
+                else
+                {
+                    Debug.Log("Saving events to persistent storage to prevent loss on app restart");
+                    SaveEventsToDisk();
+                }
+            }
+
+            // Pause before next attempt to process the queue
+            await UniTask.WaitForSeconds(_mySettings.CooldownBeforeSend);
+        }
     }
 
     // Method for sending events
@@ -72,37 +104,6 @@ public class EventService : MonoBehaviour
                 Debug.LogWarning("Error sending events: " + request.error);
                 return false;
             }
-        }
-    }
-
-    // Method for processing the event queue
-    private async UniTask ProcessEventQueue()
-    {
-        while (true)
-        {
-            if (_eventQueue.events.Count > 0)
-            {
-                Debug.Log("Attempting to send events...");
-
-                // Try to send events
-                bool success = await SendEventsAsync(_eventQueue);
-
-                // If successful, remove events from the queue
-                if (success)
-                {
-                    Debug.Log("Removing sent events from the queue.");
-                    _eventQueue.events.Clear(); // Clear the queue after successful send
-                    DeleteEventsFromDisk();
-                }
-                else
-                {
-                    Debug.Log("Saving events to persistent storage to prevent loss on app restart");
-                    SaveEventsToDisk();
-                }
-            }
-
-            // Pause before next attempt to process the queue
-            await UniTask.WaitForSeconds(_mySettings.CooldownBeforeSend);
         }
     }
 
